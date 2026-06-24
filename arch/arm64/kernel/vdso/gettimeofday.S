@@ -25,10 +25,10 @@
 #define NSEC_PER_SEC_LO16	0xca00
 #define NSEC_PER_SEC_HI16	0x3b9a
 
-vdso_data	.req	x6
-seqcnt		.req	w7
-w_tmp		.req	w8
-x_tmp		.req	x8
+#define vdso_data x6
+#define seqcnt w7
+#define w_tmp w8
+#define x_tmp x8
 
 /*
  * Conventions for macro arguments:
@@ -37,26 +37,26 @@ x_tmp		.req	x8
  */
 
 	.macro	seqcnt_acquire
-9999:	ldr	seqcnt, [vdso_data, #VDSO_TB_SEQ_COUNT]
-	tbnz	seqcnt, #0, 9999b
+9999:	ldr	seqcnt, [vdso_data, VDSO_TB_SEQ_COUNT]
+	tbnz	seqcnt, 0, 9999b
 	dmb	ishld
 	.endm
 
 	.macro	seqcnt_check fail
 	dmb	ishld
-	ldr	w_tmp, [vdso_data, #VDSO_TB_SEQ_COUNT]
+	ldr	w_tmp, [vdso_data, VDSO_TB_SEQ_COUNT]
 	cmp	w_tmp, seqcnt
 	b.ne	\fail
 	.endm
 
 	.macro	syscall_check fail
-	ldr	w_tmp, [vdso_data, #VDSO_USE_SYSCALL]
+	ldr	w_tmp, [vdso_data, VDSO_USE_SYSCALL]
 	cbnz	w_tmp, \fail
 	.endm
 
 	.macro get_nsec_per_sec res
-	mov	\res, #NSEC_PER_SEC_LO16
-	movk	\res, #NSEC_PER_SEC_HI16, lsl #16
+	mov	\res, NSEC_PER_SEC_LO16
+	movk	\res, NSEC_PER_SEC_HI16, lsl 16
 	.endm
 
 	/*
@@ -70,7 +70,7 @@ x_tmp		.req	x8
 	/* Calculate cycle delta and convert to ns. */
 	sub	\res, x_tmp, \cycle_last
 	/* We can only guarantee 56 bits of precision. */
-	movn	x_tmp, #0xff00, lsl #48
+	movn	x_tmp, 0xff00, lsl 48
 	and	\res, x_tmp, \res
 	mul	\res, \res, \mult
 	.endm
@@ -106,12 +106,12 @@ x_tmp		.req	x8
 	cmp	\nsec, \nsec_to_sec
 	b.lt	9999f
 	sub	\nsec, \nsec, \nsec_to_sec
-	add	\sec, \sec, #1
+	add	\sec, \sec, 1
 9999:
-	cmp	\nsec, #0
+	cmp	\nsec, 0
 	b.ge	9998f
 	add	\nsec, \nsec, \nsec_to_sec
-	sub	\sec, \sec, #1
+	sub	\sec, \sec, 1
 9998:
 	.endm
 
@@ -119,7 +119,7 @@ x_tmp		.req	x8
 	.if \shift == 1
 	lsr	x11, x11, x12
 	.endif
-	stp	x10, x11, [x1, #TSPEC_TV_SEC]
+	stp	x10, x11, [x1, TSPEC_TV_SEC]
 	mov	x0, xzr
 	ret
 	.endm
@@ -143,10 +143,10 @@ ENTRY(__kernel_gettimeofday)
 	/* Compute the time of day. */
 1:	seqcnt_acquire
 	syscall_check fail=4f
-	ldr	x10, [vdso_data, #VDSO_CS_CYCLE_LAST]
+	ldr	x10, [vdso_data, VDSO_CS_CYCLE_LAST]
 	/* w11 = cs_mono_mult, w12 = cs_shift */
-	ldp	w11, w12, [vdso_data, #VDSO_CS_MONO_MULT]
-	ldp	x13, x14, [vdso_data, #VDSO_XTIME_CLK_SEC]
+	ldp	w11, w12, [vdso_data, VDSO_CS_MONO_MULT]
+	ldp	x13, x14, [vdso_data, VDSO_XTIME_CLK_SEC]
 	seqcnt_check fail=1b
 
 	get_nsec_per_sec res=x9
@@ -157,22 +157,22 @@ ENTRY(__kernel_gettimeofday)
 		clock_nsec=x15, xtime_sec=x13, xtime_nsec=x14, nsec_to_sec=x9
 
 	/* Convert ns to us. */
-	mov	x13, #1000
+	mov	x13, 1000
 	lsl	x13, x13, x12
 	udiv	x11, x11, x13
-	stp	x10, x11, [x0, #TVAL_TV_SEC]
+	stp	x10, x11, [x0, TVAL_TV_SEC]
 2:
 	/* If tz is NULL, return 0. */
 	cbz	x1, 3f
-	ldp	w4, w5, [vdso_data, #VDSO_TZ_MINWEST]
-	stp	w4, w5, [x1, #TZ_MINWEST]
+	ldp	w4, w5, [vdso_data, VDSO_TZ_MINWEST]
+	stp	w4, w5, [x1, TZ_MINWEST]
 3:
 	mov	x0, xzr
 	ret
 4:
 	/* Syscall fallback. */
-	mov	x8, #__NR_gettimeofday
-	svc	#0
+	mov	x8, __NR_gettimeofday
+	svc	0
 	ret
 	.cfi_endproc
 ENDPROC(__kernel_gettimeofday)
@@ -182,11 +182,11 @@ ENDPROC(__kernel_gettimeofday)
 /* int __kernel_clock_gettime(clockid_t clock_id, struct timespec *tp); */
 ENTRY(__kernel_clock_gettime)
 	.cfi_startproc
-	cmp	w0, #JUMPSLOT_MAX
+	cmp	w0, JUMPSLOT_MAX
 	b.hi	syscall
 	adr	vdso_data, _vdso_data
 	adr	x_tmp, jumptable
-	add	x_tmp, x_tmp, w0, uxtw #2
+	add	x_tmp, x_tmp, w0, uxtw 2
 	br	x_tmp
 
 	ALIGN
@@ -207,10 +207,10 @@ jumptable:
 realtime:
 	seqcnt_acquire
 	syscall_check fail=syscall
-	ldr	x10, [vdso_data, #VDSO_CS_CYCLE_LAST]
+	ldr	x10, [vdso_data, VDSO_CS_CYCLE_LAST]
 	/* w11 = cs_mono_mult, w12 = cs_shift */
-	ldp	w11, w12, [vdso_data, #VDSO_CS_MONO_MULT]
-	ldp	x13, x14, [vdso_data, #VDSO_XTIME_CLK_SEC]
+	ldp	w11, w12, [vdso_data, VDSO_CS_MONO_MULT]
+	ldp	x13, x14, [vdso_data, VDSO_XTIME_CLK_SEC]
 	seqcnt_check fail=realtime
 
 	/* All computations are done with left-shifted nsecs. */
@@ -226,11 +226,11 @@ realtime:
 monotonic:
 	seqcnt_acquire
 	syscall_check fail=syscall
-	ldr	x10, [vdso_data, #VDSO_CS_CYCLE_LAST]
+	ldr	x10, [vdso_data, VDSO_CS_CYCLE_LAST]
 	/* w11 = cs_mono_mult, w12 = cs_shift */
-	ldp	w11, w12, [vdso_data, #VDSO_CS_MONO_MULT]
-	ldp	x13, x14, [vdso_data, #VDSO_XTIME_CLK_SEC]
-	ldp	x3, x4, [vdso_data, #VDSO_WTM_CLK_SEC]
+	ldp	w11, w12, [vdso_data, VDSO_CS_MONO_MULT]
+	ldp	x13, x14, [vdso_data, VDSO_XTIME_CLK_SEC]
+	ldp	x3, x4, [vdso_data, VDSO_WTM_CLK_SEC]
 	seqcnt_check fail=monotonic
 
 	/* All computations are done with left-shifted nsecs. */
@@ -249,10 +249,10 @@ monotonic:
 monotonic_raw:
 	seqcnt_acquire
 	syscall_check fail=syscall
-	ldr	x10, [vdso_data, #VDSO_CS_CYCLE_LAST]
+	ldr	x10, [vdso_data, VDSO_CS_CYCLE_LAST]
 	/* w11 = cs_raw_mult, w12 = cs_shift */
-	ldp	w12, w11, [vdso_data, #VDSO_CS_SHIFT]
-	ldp	x13, x14, [vdso_data, #VDSO_RAW_TIME_SEC]
+	ldp	w12, w11, [vdso_data, VDSO_CS_SHIFT]
+	ldp	x13, x14, [vdso_data, VDSO_RAW_TIME_SEC]
 	seqcnt_check fail=monotonic_raw
 
 	/* All computations are done with left-shifted nsecs. */
@@ -269,15 +269,15 @@ monotonic_raw:
 	ALIGN
 realtime_coarse:
 	seqcnt_acquire
-	ldp	x10, x11, [vdso_data, #VDSO_XTIME_CRS_SEC]
+	ldp	x10, x11, [vdso_data, VDSO_XTIME_CRS_SEC]
 	seqcnt_check fail=realtime_coarse
 	clock_gettime_return
 
 	ALIGN
 monotonic_coarse:
 	seqcnt_acquire
-	ldp	x10, x11, [vdso_data, #VDSO_XTIME_CRS_SEC]
-	ldp	x13, x14, [vdso_data, #VDSO_WTM_CLK_SEC]
+	ldp	x10, x11, [vdso_data, VDSO_XTIME_CRS_SEC]
+	ldp	x13, x14, [vdso_data, VDSO_WTM_CLK_SEC]
 	seqcnt_check fail=monotonic_coarse
 
 	/* Computations are done in (non-shifted) nsecs. */
@@ -287,8 +287,8 @@ monotonic_coarse:
 
 	ALIGN
 syscall: /* Syscall fallback. */
-	mov	x8, #__NR_clock_gettime
-	svc	#0
+	mov	x8, __NR_clock_gettime
+	svc	0
 	ret
 	.cfi_endproc
 ENDPROC(__kernel_clock_gettime)
@@ -296,17 +296,17 @@ ENDPROC(__kernel_clock_gettime)
 /* int __kernel_clock_getres(clockid_t clock_id, struct timespec *res); */
 ENTRY(__kernel_clock_getres)
 	.cfi_startproc
-	cmp	w0, #CLOCK_REALTIME
-	ccmp	w0, #CLOCK_MONOTONIC, #0x4, ne
-	ccmp	w0, #CLOCK_MONOTONIC_RAW, #0x4, ne
+	cmp	w0, CLOCK_REALTIME
+	ccmp	w0, CLOCK_MONOTONIC, 0x4, ne
+	ccmp	w0, CLOCK_MONOTONIC_RAW, 0x4, ne
 	b.ne	1f
 
 	adr	vdso_data, _vdso_data
-	ldr	w2, [vdso_data, #CLOCK_REALTIME_RES]
+	ldr	w2, [vdso_data, CLOCK_REALTIME_RES]
 	b	2f
 1:
-	cmp	w0, #CLOCK_REALTIME_COARSE
-	ccmp	w0, #CLOCK_MONOTONIC_COARSE, #0x4, ne
+	cmp	w0, CLOCK_REALTIME_COARSE
+	ccmp	w0, CLOCK_MONOTONIC_COARSE, 0x4, ne
 	b.ne	4f
 	ldr	x2, 5f
 2:
@@ -318,8 +318,8 @@ ENTRY(__kernel_clock_getres)
 	ret
 
 4:	/* Syscall fallback. */
-	mov	x8, #__NR_clock_getres
-	svc	#0
+	mov	x8, __NR_clock_getres
+	svc	0
 	ret
 5:
 	.quad	CLOCK_COARSE_RES
