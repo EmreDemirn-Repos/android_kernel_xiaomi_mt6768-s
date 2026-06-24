@@ -510,9 +510,19 @@ ifneq ($(KBUILD_SRC),)
 endif
 
 ifeq ($(cc-name),clang)
-ifneq ($(CROSS_COMPILE),)
+ifeq ($(CROSS_COMPILE),)
+ifeq ($(ARCH),arm64)
+CLANG_TRIPLE	?= aarch64-linux-gnu-
+endif
+else
 CLANG_TRIPLE	?= $(CROSS_COMPILE)
+endif
+
+ifneq ($(CLANG_TRIPLE),)
 CLANG_FLAGS	+= --target=$(notdir $(CLANG_TRIPLE:%-=%))
+endif
+
+ifneq ($(CROSS_COMPILE),)
 ifeq ($(shell $(srctree)/scripts/clang-android.sh $(CC) $(CLANG_FLAGS)), y)
 $(error "Clang with Android --target detected. Did you specify CLANG_TRIPLE?")
 endif
